@@ -62,8 +62,10 @@ func CreateMenu() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": validationErr.Error()})
 			return
 		}
-		menu.Created_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
-		menu.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+		now := time.Now()
+		menu.Created_at = &now
+		menu.Updated_at = &now
+
 		menu.ID = primitive.NewObjectID()
 		menu.Menu_id = menu.ID.Hex()
 
@@ -115,7 +117,9 @@ func UpdateMenu() gin.HandlerFunc {
 			if menu.Category != "" {
 				updateObj = append(updateObj, bson.E{"category", menu.Category})
 			}
-			menu.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+			
+			now := time.Now()
+			menu.Updated_at = &now
 			updateObj = append(updateObj, bson.E{"updated_at", menu.Updated_at})
 
 			upsert := true

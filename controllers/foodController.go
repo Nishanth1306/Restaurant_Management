@@ -5,6 +5,8 @@ import (
 	"RestaurantManagement/models"
 	"context"
 	"fmt"
+	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var foodCollection *mongo.Collection = database.OpenCollection(database.Client, "food")
@@ -37,29 +40,29 @@ func GetFoods() gin.HandlerFunc {
 		startIndex, err = strconv.Atoi(c.Query("startIndex"))
 
 		matchStage := bson.D{{"$match", bson.D{{}}}}
-		groupStage := bson.D{{"$group", bson.D{{"_id", bson.D{{"_id", "null"}}},{"total_count", bson.D{{"$sum", 1 }}},{"data",bson.D{{"$push","$$ROOT"}}}  }}}
+		groupStage := bson.D{{"$group", bson.D{{"_id", bson.D{{"_id", "null"}}}, {"total_count", bson.D{{"$sum", 1}}}, {"data", bson.D{{"$push", "$$ROOT"}}}}}}
 		projectStage := bson.D{
 			{
 				"$project", bson.D{
 					{"_id", 0},
 					{"total_count", 1},
 					{"food_items", bson.D{{"$slice", []interface{}{"$data", startIndex, recordPerPage}}}},
-				}
-			}
+				},
+			},
 		}
 
-		result , err := foodCollection.Aggregate(ctx, mongo.Pipeline{
-			matchStage,groupStage,projectStage,  
+		result, err := foodCollection.Aggregate(ctx, mongo.Pipeline{
+			matchStage, groupStage, projectStage,
 		})
 
 		defer cancel()
-		 
-		if err != nil{
-			c.JSON(http.StatusInternalServerError,gin.H{"error":"Error Occured While fetching the food items"})
-			 
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error Occured While fetching the food items"})
+
 		}
 		var allFoods []bson.M
-		if err = result.All(ctx, &allFoods); err != nil{
+		if err = result.All(ctx, &allFoods); err != nil {
 			log.Fatal(err)
 		}
 		c.JSON(http.StatusOK, allFoods[0])
@@ -127,7 +130,7 @@ func CreateFood() gin.HandlerFunc {
 func UpdateFood() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-		var menu models.menu
+		var menu models.Menu
 		var food models.Food
 
 		foodId := c.Param("food_id")
@@ -136,10 +139,10 @@ func UpdateFood() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		
+
 		var updateObj primitive.D
 
-		if food.Name != nil{
+		if food.Name != nil {
 			updateObj = append(updateObj, bson.E{"name", food.Name})
 		}
 
@@ -147,11 +150,11 @@ func UpdateFood() gin.HandlerFunc {
 			updateObj = append(updateObj, bson.E{"price", food.Price})
 		}
 		if food.Food_image != nil {
-			updateObj = append(updateObj, bson.E{"food_image", food.Image})
+			updateObj = append(updateObj, bson.E{"food_image", food.Food_image})
 
 		}
 		if food.Menu_id != nil {
-			err := menuCollection.FindONe(ctx, bson.M{"menu_id":food.Menu_id}).Decode(&menu)
+			err := menuCollection.FindOne(ctx, bson.M{"menu_id": food.Menu_id}).Decode(&menu)
 			defer cancel()
 
 			if err != nil {
@@ -160,12 +163,12 @@ func UpdateFood() gin.HandlerFunc {
 				return
 			}
 			updateObj = append(updateObj, bson.E{"menu_id", food.Menu_id})
-		}  
+		}
 
 		food.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
-		updateObj = append(updateObj, bson.E{"updated_at",food.Updated_at})
+		updateObj = append(updateObj, bson.E{"updated_at", food.Updated_at})
 
-		upsert = true
+		upsert := true
 		filter := bson.M{"food_id": foodId}
 
 		opt := options.UpdateOptions{
@@ -175,15 +178,13 @@ func UpdateFood() gin.HandlerFunc {
 		result, err := foodCollection.UpdateOne(
 			ctx,
 			filter,
-			bson.D{
-				{"$set", updateObj }
-			},
+			bson.D{{"$set", updateObj}},
 			&opt,
 		)
 		if err != nil {
 			msg := fmt.Sprint("Food item was not updated")
-			c.JSON(http.StatusInternalServerError, gin.H{"error":msg})
-			return 
+			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			return
 		}
 		c.JSON(http.StatusOK, result)
 	}
@@ -193,6 +194,6 @@ func round(num float64) int {
 }
 
 func toFixed(num float64, precision int) float64 {
-	output := mat.Pow(10, float64(precision))
-	return float64(round(num * output)) / output
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
 }

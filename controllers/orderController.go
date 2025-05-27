@@ -4,7 +4,6 @@ import (
 	"RestaurantManagement/database"
 	"RestaurantManagement/models"
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -57,12 +56,68 @@ func CreateOrder() gin.HandlerFunc {
 	}
 }
 
+// func UpdateOrder() gin.HandlerFunc {
+// 	return func(c *gin.Context) {
+// 		var table models.Table
+// 		var order models.Order
+
+// 		var updateObj primitive.D
+// 		orderId := c.Param("order_id")
+
+// 		if err := c.BindJSON(&order); err != nil {
+// 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+// 			return
+// 		}
+
+// 		if order.Table_id != nil {
+// 			err = menuCollection.FindOne(ctx, bson.M{"table_id": food.Table_id}).Decode(&table)
+// 			defer cancel()
+// 			if err != nil {
+// 				msg := "Table was not found"
+// 				c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+// 				return
+// 			}
+// 			updateObj = append(updateObj, bson.E{"table_id", table.Table_id})
+// 		}
+// 		order.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+// 		updateObj = append(updateObj, bson.E{"updated_at", food.Updated_at})
+
+// 	    upsert:= true
+
+// 		filter := bson.M{"order_id": orderId}
+
+// 		opt := options.UpdateOptions{
+// 			Upsert: &upsert,
+// 		}
+
+// 		orderCollection.UpdateOne(
+// 			ctx,
+// 			filter,
+// 			bson.D{
+// 				{"$set", updateObj},
+// 			},
+// 			&opt,
+// 		)
+// 		if err != nil {
+// 			msg := fmt.Sprintf("Order item was not updated")
+// 			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+// 			return
+// 		}
+
+// 		defer cancel()
+// 		c.JSON(http.StatusOK, result)
+// 	}
+// }
+
 func UpdateOrder() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
 		var table models.Table
 		var order models.Order
-
 		var updateObj primitive.D
+
 		orderId := c.Param("order_id")
 
 		if err := c.BindJSON(&order); err != nil {
@@ -70,41 +125,33 @@ func UpdateOrder() gin.HandlerFunc {
 			return
 		}
 
-		if order.Table_id != "" {
-			err := menuCollection.FindOne(ctx, bson.M{"table_id": food.Table_id}).Decode(&table)
-			defer cancel()
+		if order.Table_id != nil {
+			err := menuCollection.FindOne(ctx, bson.M{"table_id": order.Table_id}).Decode(&table)
 			if err != nil {
-				msg := "Table was not found"
-				c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Table was not found"})
 				return
 			}
 			updateObj = append(updateObj, bson.E{"table_id", table.Table_id})
 		}
-		order.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
-		updateObj = append(updateObj, bson.E{"updated_at", food.Updated_at})
+		order.Updated_at = time.Now()
+		updateObj = append(updateObj, bson.E{"updated_at", order.Updated_at})
 
-		upsert : true
+		upsert := true
 		filter := bson.M{"order_id": orderId}
+		opt := options.UpdateOptions{Upsert: &upsert}
 
-		opt := options.UpdateOptions{
-			Upsert: &upsert,
-		}
-
-		orderCollection.UpdateOne(
+		result, err := orderCollection.UpdateOne(
 			ctx,
 			filter,
-			bson.D{
-				{"$set", updateObj},
-			},
+			bson.D{{"$set", updateObj}},
 			&opt,
 		)
+
 		if err != nil {
-			msg := fmt.Sprintf("Order item was not updated")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Order item was not updated"})
 			return
 		}
 
-		defer cancel()
-		c.JSON(http.StatusOK,result)
+		c.JSON(http.StatusOK, result)
 	}
 }
