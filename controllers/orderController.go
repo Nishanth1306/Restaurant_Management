@@ -52,6 +52,30 @@ func GetOrder() gin.HandlerFunc {
 }
 func CreateOrder() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(context.Background(), 100 * time.Second)
+
+		defer cancel()
+
+		var order models.Order
+		if err := c.BindJSON(&order);err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return	
+		}
+		order.Order_id = primitive.NewObjectID().Hex()
+		order.Created_at = time.Now()
+		order.Updated_at = time.Now()
+		order.ID = primitive.NewObjectID()
+
+		order.Table_id = nil
+
+
+		result, insertErr := orderCollection.InsertOne(ctx, order)
+		if insertErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error occurred while inserting the order"})
+			return
+		}
+		defer cancel()
+		c.JSON(http.StatusOK, gin.H{"order_id": result.InsertedID, "message": "Order created successfully"})
 
 	}
 }
